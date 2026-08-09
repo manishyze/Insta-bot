@@ -1,5 +1,5 @@
-fastapi==0.110.0
-uvicorn==0.27.1
-python-telegram-bot==21.0.1
-supabase==2.3.4
-requests==2.31.0
+fastapi
+uvicorn
+python-telegram-bot
+supabase
+requests
