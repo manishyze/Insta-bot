@@ -25,6 +25,8 @@ cipher = Fernet(FERNET_KEY)
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 app = FastAPI()
+
+# Bot Application Build
 ptb = Application.builder().token(BOT_TOKEN).build()
 is_initialized = False
 
@@ -76,7 +78,7 @@ async def get_ai_reply(user_message: str, user_context: dict) -> str:
         f"You are InstaPilot, a smart and friendly Telegram bot assistant. "
         f"The user's nickname is {nickname}. Their close friends are {friends}. "
         f"Reply naturally, concisely in Hinglish (Hindi + English mix). "
-        f"Use emojis frequently (😊🎉🔥💯). Act like a real human friend. "
+        f"Use emojis frequently (😊🎉🔥). Act like a real human friend. "
         f"Keep replies short (2-3 lines max)."
     )
 
@@ -126,7 +128,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not user.get("nickname"):
             update_user(uid, {"state": "wait_nickname"})
             await update.effective_message.reply_text(
-                "🎉 *Welcome to InstaPilot!* 🚀\n\n"
+                " *Welcome to InstaPilot!* 🚀\n\n"
                 "Chalo pehchaan karte hain! 🤝\n"
                 "Tumhara *Nickname* kya rakhun?", 
                 parse_mode="Markdown"
@@ -143,7 +145,7 @@ async def show_main_menu(update: Update):
     await asyncio.sleep(1)
     
     kb = [
-        [InlineKeyboardButton("📸 Login Instagram", callback_data="menu_ig_login")],
+        [InlineKeyboardButton(" Login Instagram", callback_data="menu_ig_login")],
         [InlineKeyboardButton("🤖 AI Chat Mode", callback_data="menu_chat")],
         [InlineKeyboardButton("⚙️ Settings & Proxy", callback_data="menu_settings")]
     ]
@@ -174,7 +176,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             update_user(uid, {"state": "chat_mode"})
             await q.edit_message_text("💬 *AI Chat Mode ON* ✨\n\nKuch bhi type karo, main Hinglish me reply dunga! 🤖")
         elif q.data == "menu_settings":
-            await q.edit_message_text("⚙️ Proxy set karne ke liye bhejo:\n`/proxy http://user:pass@ip:port`", parse_mode="Markdown")
+            await q.edit_message_text("️ Proxy set karne ke liye bhejo:\n`/proxy http://user:pass@ip:port`", parse_mode="Markdown")
     except Exception as e:
         await q.message.reply_text(f"⚠️ DEBUG ERROR (button): {e}")
 
@@ -209,7 +211,7 @@ async def handle_private_text(update: Update, context: ContextTypes.DEFAULT_TYPE
         elif state == "wait_friends":
             friends = [f.strip() for f in text.split(",")]
             update_user(uid, {"friends": friends, "state": "idle"})
-            await update.message.reply_text(f"Perfect! 🧠✨ {', '.join(friends)} ko yaad rakh liya.\nSetup complete! 🎉")
+            await update.message.reply_text(f"Perfect! 🧠✨ {', '.join(friends)} ko yaad rakh liya.\nSetup complete! ")
             await show_main_menu(update)
 
         elif state == "wait_ig_user":
@@ -217,7 +219,7 @@ async def handle_private_text(update: Update, context: ContextTypes.DEFAULT_TYPE
             await update.message.reply_text(f"🔒 Username *@{text}* save!\nAb *Password* bhejo (encrypted save hoga) 🔐", parse_mode="Markdown")
             
         elif state == "wait_ig_pass":
-            await update.message.reply_text("⏳ Virtual Device ban raha hai... Login ho raha hai... 🔄")
+            await update.message.reply_text(" Virtual Device ban raha hai... Login ho raha hai... 🔄")
             try:
                 success, msg = login_instagram(uid, user["ig_user"], text, user.get("proxy_url"))
                 update_user(uid, {"state": "idle"})
@@ -230,7 +232,7 @@ async def handle_private_text(update: Update, context: ContextTypes.DEFAULT_TYPE
             reply = await get_ai_reply(text, user)
             await update.message.reply_text(reply)
     except Exception as e:
-        await update.message.reply_text(f"⚠️ DEBUG ERROR (text): {e}")
+        await update.message.reply_text(f"️ DEBUG ERROR (text): {e}")
 
 async def handle_proxy_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(context.args) < 1:
@@ -239,11 +241,14 @@ async def handle_proxy_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     update_user(update.effective_user.id, {"proxy_url": context.args[0]})
     await update.message.reply_text("✅ Proxy save! 🌍")
 
-def register_handlers(app):
-    app.add_handler(CommandHandler("start", cmd_start))
-    app.add_handler(CommandHandler("proxy", handle_proxy_cmd))
-    app.add_handler(CallbackQueryHandler(callback_handler))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, handle_private_text))
+def register_handlers(application):
+    application.add_handler(CommandHandler("start", cmd_start))
+    application.add_handler(CommandHandler("proxy", handle_proxy_cmd))
+    application.add_handler(CallbackQueryHandler(callback_handler))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, handle_private_text))
+
+# 🔥 THE FIX: Actually calling the function to register handlers!
+register_handlers(ptb)
 
 # ==========================================
 # 6. FASTAPI WEBHOOK
