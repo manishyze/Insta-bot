@@ -4,7 +4,7 @@ uvicorn
 supabase
 httpx
 requests
-instagrapi
 cryptography
 Pillow
 pydantic
+instagrapi @ git+https://github.com/subzeroid/instagrapi.git
