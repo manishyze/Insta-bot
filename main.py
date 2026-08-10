@@ -20,7 +20,7 @@ SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 GROQ_API_KEY = "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"
 ADMIN_TG_ID = 8528276558
 
-# Encryption Key for IG Passwords (DO NOT CHANGE THIS ONCE SET, otherwise old passwords can't be decrypted)
+# Encryption Key for IG Passwords
 FERNET_KEY = b'z9X8y7W6v5U4t3S2r1Q0p9O8n7M6l5K4j3I2h1G0f9E=' 
 cipher = Fernet(FERNET_KEY)
 
@@ -30,7 +30,7 @@ ptb = Application.builder().token(BOT_TOKEN).build()
 is_initialized = False
 
 # ==========================================
-# 2. DATABASE HELPERS
+# 2. DATABASE HELPERS (Sab yahi hai, alag file nahi chahiye)
 # ==========================================
 def get_user(uid):
     res = supabase.table("users").select("*").eq("tg_id", uid).execute()
@@ -52,20 +52,13 @@ def login_instagram(uid, ig_user, ig_pass, proxy_url=None):
     """Logs into IG, generates Virtual Device fingerprint, and saves it."""
     cl = IGClient()
     
-    # IP Rotation / Proxy Setup (Agar proxy diya hai to use karega)
     if proxy_url:
         cl.set_proxy(proxy_url)
         
-    # Login
     cl.login(ig_user, ig_pass)
-    
-    # Virtual Device Fingerprint (Ye 'settings' ek virtual phone ka DNA hai)
     settings = cl.get_settings()
-    
-    # Encrypt password before saving
     enc_pass = cipher.encrypt(ig_pass.encode()).decode('utf-8')
     
-    # Save to DB
     update_user(uid, {
         "ig_user": ig_user,
         "ig_pass_enc": enc_pass,
@@ -84,29 +77,26 @@ def get_ig_client(uid):
     if user.get("proxy_url"):
         cl.set_proxy(user["proxy_url"])
         
-    # Load the virtual phone DNA
     cl.load_settings(user["ig_settings"])
-    
-    # Re-authenticate using session (No password needed now)
     cl.login(user["ig_user"], cipher.decrypt(user["ig_pass_enc"].encode()).decode('utf-8'))
     return cl
 
 # ==========================================
-# 4. AI ENGINE (Groq + Hinglish + Human Sleep)
+# 4. AI ENGINE (Groq + Hinglish + Human Sleep + Emojis)
 # ==========================================
 async def get_ai_reply(user_message: str, user_context: dict) -> str:
     # 💤 Human Sleep Mode: Random delay before thinking
     await asyncio.sleep(random.uniform(1.5, 3.5))
     
-    # Context building (Bot ko user ka naam aur dost pata hain)
     nickname = user_context.get("nickname", "Friend")
     friends = ", ".join(user_context.get("friends", [])) if user_context.get("friends") else "none"
     
     system_prompt = (
-        f"You are a smart, friendly Telegram bot assistant named InstaPilot. "
+        f"You are InstaPilot, a smart and friendly Telegram bot assistant. "
         f"The user's nickname is {nickname}. Their close friends are {friends}. "
         f"Reply naturally, concisely in Hinglish (Hindi + English mix). "
-        f"Use emojis occasionally. Act like a real human, not an AI."
+        f"Use emojis frequently to express emotions (😊🎉🔥💯). "
+        f"Act like a real human friend, not an AI. Keep replies short (2-3 lines max)."
     )
 
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
@@ -153,10 +143,14 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # Agar onboarding baaki hai
     if not user.get("nickname"):
         update_user(uid, {"state": "wait_nickname"})
-        await update.effective_message.reply_text("Chalo pehchaan karte hain! 🤝\nTumhara *Nickname* kya rakhun? (e.g., Rocky, Boss)", parse_mode="Markdown")
+        await update.effective_message.reply_text(
+            "🎉 *Welcome to InstaPilot!* 🚀\n\n"
+            "Chalo pehchaan karte hain! 🤝\n"
+            "Tumhara *Nickname* kya rakhun? (e.g., Rocky, Boss, Champion)", 
+            parse_mode="Markdown"
+        )
         return
 
     await show_main_menu(update)
@@ -171,9 +165,18 @@ async def show_main_menu(update: Update):
         [InlineKeyboardButton("🤖 AI Chat Mode", callback_data="menu_chat")],
         [InlineKeyboardButton("⚙️ Settings & Proxy", callback_data="menu_settings")]
     ]
+    
+    welcome_msg = (
+        f"👋 Welcome back, *{name}*! 🎉\n\n"
+        f"InstaPilot ready hai! 🚀\n"
+        f"Tumhara AI assistant 24/7 available hai. 💪\n\n"
+        f"👇 *Kya karna hai aaj?*"
+    )
+    
     await update.effective_message.reply_text(
-        f"Welcome back, *{name}*! 🚀\nInstaPilot ready hai. Kya karna hai?", 
-        reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown"
+        welcome_msg, 
+        reply_markup=InlineKeyboardMarkup(kb), 
+        parse_mode="Markdown"
     )
 
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -185,15 +188,30 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if q.data == "accept_priv":
         update_user(uid, {"privacy_accepted": True})
         await q.message.delete()
-        await cmd_start(update, context) # Restart flow to onboarding
+        await cmd_start(update, context)
     elif q.data == "menu_ig_login":
         update_user(uid, {"state": "wait_ig_user"})
-        await q.edit_message_text("📸 *Instagram Login*\n\nApna Instagram Username bhejo (bina @ ke):", parse_mode="Markdown")
+        await q.edit_message_text(
+            "📸 *Instagram Login*\n\n"
+            "Apna Instagram Username bhejo (bina @ ke):\n"
+            "_(e.g., manish.yze)_", 
+            parse_mode="Markdown"
+        )
     elif q.data == "menu_chat":
         update_user(uid, {"state": "chat_mode"})
-        await q.edit_message_text("💬 *AI Chat Mode ON*\n\nKuch bhi type karo, main Hinglish me reply dunga. (Rukne ka time: 2-5 sec) ⏳")
+        await q.edit_message_text(
+            "💬 *AI Chat Mode ON* ✨\n\n"
+            "Kuch bhi type karo, main Hinglish me reply dunga! 🤖\n"
+            "_(Rukne ka time: 2-5 sec - human feel)_ ⏳"
+        )
     elif q.data == "menu_settings":
-        await q.edit_message_text("⚙️ Proxy set karne ke liye bhejo:\n`/proxy http://user:pass@ip:port`", parse_mode="Markdown")
+        await q.edit_message_text(
+            "⚙️ *Settings*\n\n"
+            "Proxy set karne ke liye bhejo:\n"
+            "`/proxy http://user:pass@ip:port`\n\n"
+            "_(Optional - IP rotation ke liye)_", 
+            parse_mode="Markdown"
+        )
 
 async def handle_private_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
@@ -210,56 +228,93 @@ async def handle_private_text(update: Update, context: ContextTypes.DEFAULT_TYPE
     # --- ONBOARDING FLOW ---
     if state == "wait_nickname":
         update_user(uid, {"nickname": text, "state": "wait_age"})
-        await update.message.reply_text(f"Badhiya {text}! 😎\nAb batao, tumhari *Age* kya hai? (Sirf number likho)", parse_mode="Markdown")
+        await update.message.reply_text(
+            f"Badhiya *{text}*! 😎✨\n"
+            "Ab batao, tumhari *Age* kya hai? (Sirf number likho) 🔢", 
+            parse_mode="Markdown"
+        )
         
     elif state == "wait_age":
         if text.isdigit():
             update_user(uid, {"age": int(text), "state": "wait_bday"})
-            await update.message.reply_text("Noted! 🎂\nTumhara *Birthday* kab hai? (DD-MM format me likho)")
+            await update.message.reply_text(
+                f"Noted! 🎂\n"
+                "Tumhara *Birthday* kab hai? (DD-MM format me likho)\n"
+                "_(e.g., 15-08 for 15 August)_ 🎉"
+            )
         else:
             await update.message.reply_text("Bhai, sirf number likho age ke liye! 🔢")
             
     elif state == "wait_bday":
         update_user(uid, {"birthday": text, "state": "wait_friends"})
-        await update.message.reply_text("Done! 🎉\nAb apne *Top 3 Friends* ke naam comma (,) laga kar bhejo.\n(e.g., Rahul, Priya, Amit)")
+        await update.message.reply_text(
+            "Done! 🎊\n"
+            "Ab apne *Top 3 Friends* ke naam comma (,) laga kar bhejo.\n"
+            "_(e.g., Rahul, Priya, Amit)_ 👥"
+        )
         
     elif state == "wait_friends":
         friends = [f.strip() for f in text.split(",")]
         update_user(uid, {"friends": friends, "state": "idle"})
-        await update.message.reply_text(f"Perfect! {', '.join(friends)} ko yaad rakh liya. 🧠\nAb tumhara setup complete hai!")
+        await update.message.reply_text(
+            f"Perfect! 🧠✨\n"
+            f"{', '.join(friends)} ko yaad rakh liya.\n"
+            "Ab tumhara setup complete hai! 🎉\n\n"
+            "Ab Instagram login kar sakte ho ya AI chat start kar sakte ho! 🚀"
+        )
         await show_main_menu(update)
 
     # --- INSTAGRAM LOGIN FLOW ---
     elif state == "wait_ig_user":
         update_user(uid, {"ig_user": text, "state": "wait_ig_pass"})
-        await update.message.reply_text("🔒 Username save ho gaya.\nAb apna *Password* bhejo. (Ye encrypted hoke save hoga, koi nahi dekh payega).")
+        await update.message.reply_text(
+            f"🔒 Username *@{text}* save ho gaya.\n\n"
+            "Ab apna *Password* bhejo.\n"
+            "_(Ye encrypted hoke save hoga, koi nahi dekh payega)_ 🔐"
+        )
         
     elif state == "wait_ig_pass":
-        await update.message.reply_text("⏳ Virtual Device generate ho raha hai aur login ho raha hai... (10-15 sec lagenge)")
+        await update.message.reply_text(
+            "⏳ *Virtual Device generate ho raha hai...*\n"
+            "Login ho raha hai... (10-15 sec lagenge) 🔄"
+        )
         try:
-            # Login in background to avoid blocking
             success, msg = login_instagram(uid, user["ig_user"], text, user.get("proxy_url"))
             update_user(uid, {"state": "idle"})
             if success:
-                await update.message.reply_text(f"✅ {msg}\nTumhara account connect ho gaya! Virtual phone ready hai. 📱")
+                await update.message.reply_text(
+                    f"✅ *{msg}*\n\n"
+                    "Tumhara account connect ho gaya! 🎉\n"
+                    "Virtual phone ready hai. 📱✨"
+                )
             else:
                 await update.message.reply_text(f"❌ Login fail: {msg}")
         except Exception as e:
             update_user(uid, {"state": "idle"})
-            await update.message.reply_text(f"❌ Error: {str(e)}\n(Shayad IG ne block kiya ya proxy galat hai)")
+            await update.message.reply_text(
+                f"❌ *Error:* {str(e)}\n\n"
+                "_(Shayad IG ne block kiya ya proxy galat hai)_ 🤕"
+            )
 
     # --- AI CHAT MODE ---
     elif state == "chat_mode" or user.get("privacy_accepted"):
-        # Fetch user context for AI
         reply = await get_ai_reply(text, user)
         await update.message.reply_text(reply)
 
 async def handle_proxy_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(context.args) < 1:
-        await update.message.reply_text("Usage: /proxy http://user:pass@ip:port")
+        await update.message.reply_text(
+            "⚙️ *Proxy Usage:*\n\n"
+            "`/proxy http://user:pass@ip:port`\n\n"
+            "_(IP rotation ke liye optional)_", 
+            parse_mode="Markdown"
+        )
         return
     update_user(update.effective_user.id, {"proxy_url": context.args[0]})
-    await update.message.reply_text("✅ Proxy IP save ho gayi! Ab IG login is IP se hoga. 🌍")
+    await update.message.reply_text(
+        "✅ *Proxy IP save ho gayi!* 🌍\n\n"
+        "Ab IG login is IP se hoga. 🔒"
+    )
 
 def register_handlers(app):
     app.add_handler(CommandHandler("start", cmd_start))
