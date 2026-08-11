@@ -11,9 +11,6 @@ import httpx
 
 logging.basicConfig(level=logging.INFO)
 
-# ==========================================
-# 1. CONFIG & SECRETS
-# ==========================================
 BOT_TOKEN = "8804881343:AAFr7Li3dztS-KC7QMd-jdvexIOdvGncc68"
 SUPABASE_URL = "https://krkychjmledoaepyeyhw.supabase.co"
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtya3ljaGptbGVkb2FlcHlleWh3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYyNjcyNTcsImV4cCI6MjEwMTg0MzI1N30.VkMK6-ghUnlFj2n51JTMJE9KQeE55IrH8CjBQR4XgcA"
@@ -27,9 +24,6 @@ app = FastAPI()
 ptb = Application.builder().token(BOT_TOKEN).build()
 is_initialized = False
 
-# ==========================================
-# 2. DATABASE & IG HELPERS
-# ==========================================
 def get_user(uid):
     res = supabase.table("users").select("*").eq("tg_id", uid).execute()
     return res.data[0] if res.data else None
@@ -59,17 +53,14 @@ def get_ig_client(uid):
     if user.get("proxy_url"): cl.set_proxy(user["proxy_url"])
     cl.load_settings(user["ig_settings"])
     try:
-        cl.login(user["ig_user"], "") # Session ID login doesn't need password here
+        # FIX: Use the actual session ID saved in ig_pass_enc
+        cl.login_by_sessionid(user["ig_pass_enc"])
         return cl
     except: return None
 
-# Emotional Messages
 MSG_FOLLOW_ACCEPT = "Hey... thanks for following. Sach kahun toh main khud ko kaafi lost feel karta hu aajkal. Agar koi kaam hai toh bata dena. Thanks for being here. 🥀"
 MSG_DM_REPLY = "Hey... kaise ho? Sach bataun toh main thoda akela feel kar raha hu aajkal. Tum sunaao, sab theek? 🥺"
 
-# ==========================================
-# 3. AI ENGINE
-# ==========================================
 async def get_ai_reply(user_message: str, user_context: dict) -> str:
     nickname = user_context.get("nickname") or "Friend"
     system_prompt = f"You are InstaPilot. User's nickname is {nickname}. Reply naturally in Hinglish. Use emojis frequently (😊🎉🔥). Act like a real human friend."
@@ -81,9 +72,6 @@ async def get_ai_reply(user_message: str, user_context: dict) -> str:
             return res.json()["choices"][0]["message"]["content"].strip()
     except: return "Bhai, network issue hai. Thodi der baad try kar! 🤕"
 
-# ==========================================
-# 4. TELEGRAM HANDLERS
-# ==========================================
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         uid = update.effective_user.id
@@ -174,8 +162,9 @@ async def handle_private_text(update: Update, context: ContextTypes.DEFAULT_TYPE
             try:
                 cl.login_by_sessionid(text)
                 settings = cl.get_settings()
-                update_user(uid, {"ig_user": cl.username, "ig_pass_enc": "SESSION_LOGIN", "ig_settings": settings, "state": "idle"})
-                await update.message.reply_text(f"✅ *Logged in as @{cl.username}!*\nSession saved safely. 🔐", parse_mode="Markdown")
+                # FIX: Save the ACTUAL session ID text, not the string "SESSION_LOGIN"
+                update_user(uid, {"ig_user": cl.username, "ig_pass_enc": text, "ig_settings": settings, "state": "idle"})
+                await update.message.reply_text(f"✅ *Logged in as @{cl.username}!*\nSession saved safely. Auto-features ab kaam karenge! 🔐", parse_mode="Markdown")
             except Exception as e:
                 update_user(uid, {"state": "idle"})
                 await update.message.reply_text(f"❌ Invalid Session: {str(e)[:100]}")
@@ -185,9 +174,6 @@ async def handle_private_text(update: Update, context: ContextTypes.DEFAULT_TYPE
     except Exception as e:
         await update.message.reply_text(f"⚠️ ERROR: {e}")
 
-# ==========================================
-# 5. NEW IG AUTOMATION COMMANDS (Bulletproof)
-# ==========================================
 async def cmd_check_requests(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     await update.message.reply_text("🔍 *Checking pending requests...* 🔄", parse_mode="Markdown")
@@ -235,7 +221,6 @@ async def cmd_auto_react(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"✅ *Done!* {liked} posts/reels like kiye. 🔥", parse_mode="Markdown")
     except Exception as e: await update.message.reply_text(f"❌ Error: {str(e)[:150]}")
 
-# --- BONUS FEATURES ---
 async def cmd_ig_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     cl = get_ig_client(uid)
@@ -283,9 +268,6 @@ def register_handlers(application):
 
 register_handlers(ptb)
 
-# ==========================================
-# 6. FASTAPI WEBHOOK
-# ==========================================
 @app.post("/api/webhook")
 async def webhook(request: Request):
     global is_initialized
